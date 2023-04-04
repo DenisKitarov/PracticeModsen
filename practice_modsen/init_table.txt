@@ -1,0 +1,1 @@
+CREATE TABLE documents (id INTEGER PRIMARY KEY, rubrics ARRAY, text TEXT, created_date DATE);
