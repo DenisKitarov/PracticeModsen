@@ -1,34 +1,41 @@
-from flask import Flask, jsonify, request
-from api import db, search_documents, delete_document
-from api.models import Document
-from api.config import SQLALCHEMY_DATABASE_URI
+from src.config.cfg_parser import get_config
+from src.index.index import Index
+from src.database.database import Database
+from src.api.api import API
 
-# Создаем приложение Flask
-app = Flask(__name__)
+from src.docs.create_docs import get_apispec
 
-# Подключаем базу данных
-app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
-db.init_app(app)
+import logging
+FORMAT = '%(asctime)-15s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger('')
 
-@app.route('/documents', methods=['GET'])
-def search():
-    # Получаем параметр запроса "query"
-    query = request.args.get('query')
 
-    # Выполняем поиск документов по заданному запросу
-    documents = search_documents(query)
+def init():
+    api = API(Database(), Index())
+    return api
 
-    # Возвращаем результат в виде JSON
-    return jsonify(documents)
 
-@app.route('/documents/<int:document_id>', methods=['DELETE'])
-def delete(document_id):
-    # Удаляем документ по указанному id
-    delete_document(document_id)
+def populate_db(api: API, filepath):
+    api.database.parse_to_db(filepath)
 
-    # Возвращаем пустой ответ со статусом 204 No Content
-    return '', 204
 
-if __name__ == '__main__':
-    # Запускаем приложение на порту 5000
-    app.run(port=5000)
+def make_index(api: API):
+    logger.warning("Initial indexing started...")
+    if not api.index.index_database(api.database):
+        logger.error("Initial indexing failed")
+    else:
+        logger.warning("Initial indexing completed")
+
+
+def main(api: API):
+    config = get_config('config.ini')
+    api.app.run(port=config['server']['port'])
+
+
+if __name__ == "__main__":
+    api = init()                
+    populate_db(api, "database\\data\\posts.csv")           # Заполнение БД
+    make_index(api)                                         # Создание индекса Elasticsearch
+
+    main(api)
